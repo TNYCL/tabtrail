@@ -98,23 +98,47 @@ impl Drop for Env {
     }
 }
 
-fn fake_git(env: &Env, rel: &str, marker: &str) -> PathBuf {
+/// A fake `git` that records every invocation (one argv per line) in
+/// `$HOME/<log>.argv` and answers the branch provider's `for-each-ref`.
+fn fake_git(env: &Env, rel: &str, log: &str) -> PathBuf {
     env.script(
         rel,
         &format!(
-            "touch \"$HOME/{marker}\"\ncase \"$*\" in *for-each-ref*) printf 'main\\nfeature-{marker}\\n' ;; esac"
+            "printf '%s\\n' \"$*\" >> \"$HOME/{log}.argv\"\ncase \"$*\" in *for-each-ref*) printf 'main\\nfeature-{log}\\n' ;; esac"
         ),
     )
+}
+
+fn invocations(e: &Env, log: &str) -> Vec<String> {
+    fs::read_to_string(e.home.join(format!("{log}.argv")))
+        .unwrap_or_default()
+        .lines()
+        .map(String::from)
+        .collect()
+}
+
+/// Branch-provider runs (as opposed to background `--help` discovery probes).
+fn provider_runs(e: &Env, log: &str) -> usize {
+    invocations(e, log)
+        .iter()
+        .filter(|a| a.contains("for-each-ref"))
+        .count()
 }
 
 #[test]
 fn untrusted_provider_executable_is_never_run() {
     let e = Env::new("prov-untrusted");
-    fake_git(&e, "bin/git", "git-ran");
+    fake_git(&e, "bin/git", "git-untrusted");
     e.script("bin/docker", "touch \"$HOME/docker-ran\"; echo web");
     assert!(e.complete_bash("git switch ").is_empty());
     assert!(e.complete_bash("docker exec ").is_empty());
-    assert!(!e.home.join("git-ran").exists(), "untrusted fake git was executed");
+    // Give any (wrongly) spawned background work time to show up.
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(
+        invocations(&e, "git-untrusted"),
+        Vec::<String>::new(),
+        "untrusted fake git was executed (provider or discovery)"
+    );
     assert!(
         !e.home.join("docker-ran").exists(),
         "untrusted fake docker was executed"
@@ -124,40 +148,106 @@ fn untrusted_provider_executable_is_never_run() {
 #[test]
 fn trusted_provider_runs_the_resolved_executable_only() {
     let e = Env::new("prov-trusted");
-    let trusted = fake_git(&e, "bin/git", "trusted-ran");
+    let trusted = fake_git(&e, "bin/git", "trusted");
     assert!(e.run(&["trust", "git"]).status.success());
     let values = e.complete_bash("git switch ");
-    assert_eq!(values, ["feature-trusted-ran", "main"]);
-    assert!(e.home.join("trusted-ran").exists());
+    assert_eq!(values, ["feature-trusted", "main"]);
+    assert_eq!(provider_runs(&e, "trusted"), 1);
+
+    // Trusting also permits help discovery, which runs in the background
+    // (so it may interleave with the steps below; only `for-each-ref`
+    // counts as a provider run).
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !invocations(&e, "trusted").iter().any(|a| a == "--help") && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(
+        invocations(&e, "trusted").iter().any(|a| a == "--help"),
+        "background discovery of the trusted executable did not run: {:?}",
+        invocations(&e, "trusted")
+    );
 
     // PATH now resolves `git` to a different, untrusted executable first:
-    // it must not run, and the trusted one must not be substituted for it.
-    fs::remove_file(e.home.join("trusted-ran")).unwrap();
-    fake_git(&e, "other/git", "shadow-ran");
+    // it must not run at all, and the trusted one must not be substituted.
+    fake_git(&e, "other/git", "shadow");
     let shadowed = format!("{}:{}", e.root.join("other").display(), e.path);
     assert!(e.complete_bash_with_path(&shadowed, "git switch ").is_empty());
-    assert!(
-        !e.home.join("shadow-ran").exists(),
-        "untrusted PATH-first git was executed"
-    );
-    assert!(
-        !e.home.join("trusted-ran").exists(),
-        "trusted git was substituted for the resolved one"
+    assert_eq!(
+        provider_runs(&e, "trusted"),
+        1,
+        "trusted git was substituted for the resolved one: {:?}",
+        invocations(&e, "trusted")
     );
 
     // An explicit path to the trusted executable uses exactly that file.
     let line = format!("{} switch ", trusted.display());
-    assert_eq!(
-        e.complete_bash_with_path(&shadowed, &line),
-        ["feature-trusted-ran", "main"]
-    );
-    assert!(!e.home.join("shadow-ran").exists());
+    assert_eq!(e.complete_bash_with_path(&shadowed, &line), ["feature-trusted", "main"]);
+    assert_eq!(provider_runs(&e, "trusted"), 2);
 
     // Untrusting stops it again.
     assert!(e.run(&["untrust", "git"]).status.success());
-    fs::remove_file(e.home.join("trusted-ran")).unwrap();
     assert!(e.complete_bash("git switch ").is_empty());
-    assert!(!e.home.join("trusted-ran").exists());
+    assert_eq!(provider_runs(&e, "trusted"), 2, "untrusted git still ran the provider");
+
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(
+        invocations(&e, "shadow"),
+        Vec::<String>::new(),
+        "untrusted PATH-first git was executed (provider or discovery)"
+    );
+    // Every other invocation of the trusted git was a help probe.
+    for argv in invocations(&e, "trusted") {
+        assert!(
+            argv.contains("for-each-ref") || argv == "--help" || argv == "-h",
+            "unexpected invocation of the trusted git: {argv:?}"
+        );
+    }
+}
+
+/// Provider only, with all discovery disabled: no background probe can run,
+/// so the *entire* invocation log is exact. This keeps legitimate help
+/// probes in the combined test above from masking a substitution or
+/// revocation regression.
+#[test]
+fn provider_only_invocations_are_exact_after_shadowing_and_untrust() {
+    let e = Env::new("prov-exact");
+    fs::create_dir_all(e.home.join(".config/tabtrail")).unwrap();
+    fs::write(
+        e.home.join(".config/tabtrail/config"),
+        "help_probes = off\nman_pages = off\n",
+    )
+    .unwrap();
+    let trusted = fake_git(&e, "bin/git", "exact");
+    let provider_argv = "-c core.fsmonitor=false for-each-ref --format=%(refname:short) refs/heads/".to_string();
+    let settle = || std::thread::sleep(Duration::from_millis(300));
+    assert!(e.run(&["trust", "git"]).status.success());
+    assert_eq!(e.complete_bash("git switch "), ["feature-exact", "main"]);
+    settle();
+    assert_eq!(invocations(&e, "exact"), std::slice::from_ref(&provider_argv));
+
+    fake_git(&e, "other/git", "exact-shadow");
+    let shadowed = format!("{}:{}", e.root.join("other").display(), e.path);
+    assert!(e.complete_bash_with_path(&shadowed, "git switch ").is_empty());
+    settle();
+    assert_eq!(
+        invocations(&e, "exact"),
+        std::slice::from_ref(&provider_argv),
+        "trusted git ran while shadowed"
+    );
+    assert_eq!(invocations(&e, "exact-shadow"), Vec::<String>::new(), "shadow git ran");
+
+    let line = format!("{} switch ", trusted.display());
+    assert_eq!(e.complete_bash_with_path(&shadowed, &line), ["feature-exact", "main"]);
+    settle();
+    let twice = [provider_argv.clone(), provider_argv.clone()];
+    assert_eq!(invocations(&e, "exact"), twice);
+
+    assert!(e.run(&["untrust", "git"]).status.success());
+    assert!(e.complete_bash("git switch ").is_empty());
+    assert!(e.complete_bash_with_path(&shadowed, &line).is_empty());
+    settle();
+    assert_eq!(invocations(&e, "exact"), twice, "git ran after untrust");
+    assert_eq!(invocations(&e, "exact-shadow"), Vec::<String>::new());
 }
 
 #[test]
