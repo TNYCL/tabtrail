@@ -1,0 +1,10 @@
+Usage: kli [<options>] <command> [<args>]...
+
+Options:
+  --color=(auto|always|never)  Colorize output
+  -n, --dry-run                Do nothing
+  -h, --help                   Show this message and exit
+
+Commands:
+  sync   Synchronise data
+  purge  Purge caches

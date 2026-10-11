@@ -1,0 +1,13 @@
+Deploy the current project
+
+Usage: deployer deploy [OPTIONS] --env <ENV> [TARGET]...
+
+Arguments:
+  [TARGET]...  Targets to deploy
+
+Options:
+  -e, --env <ENV>        Target environment [possible values: dev, staging, prod]
+      --dry-run          Only print what would happen
+      --tag=<TAG>        Release tag
+  -j, --jobs <N>         Parallel jobs
+  -h, --help             Print help

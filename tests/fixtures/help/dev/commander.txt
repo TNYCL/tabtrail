@@ -1,0 +1,14 @@
+Usage: nodetool [options] [command]
+
+CLI for things
+
+Options:
+  -V, --version             output the version number
+  -e, --env <environment>   environment (choices: "dev", "prod", default: "dev")
+  -d, --debug               output extra debugging
+  -h, --help                display help for command
+
+Commands:
+  init [options] <name>     create a project
+  run|r <script>            run a script
+  help [command]            display help for command

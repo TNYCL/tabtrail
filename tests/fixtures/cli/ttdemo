@@ -1,0 +1,36 @@
+#!/bin/sh
+# Synthetic clap-style CLI used by the shell tests. Every invocation is
+# logged so tests can prove that Tab never runs the composed command.
+printf '%s\n' "$*" >> "$HOME/ttdemo-invocations.log"
+case "$*" in
+  "--help") cat <<'HELP' ;;
+Synthetic deployment tool
+
+Usage: ttdemo [OPTIONS] <COMMAND>
+
+Commands:
+  deploy  Deploy the app
+  status  Show status
+  prüfen  Prüft die Konfiguration
+  help    Print help
+
+Options:
+  -v, --verbose  Verbose output
+  -h, --help     Print help
+HELP
+  "deploy --help") cat <<'HELP' ;;
+Deploy the app
+
+Usage: ttdemo deploy [OPTIONS] [TARGET]
+
+Arguments:
+  [TARGET]  What to deploy
+
+Options:
+  -e, --env <ENV>       Environment [possible values: dev, staging, prod]
+      --dry-run         Only print what would happen
+      --config <FILE>   Configuration file
+  -h, --help            Print help
+HELP
+  *) printf 'ttdemo ran with:'; for a in "$@"; do printf ' <%s>' "$a"; done; printf '\n' ;;
+esac

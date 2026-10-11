@@ -1,0 +1,40 @@
+[package]
+name = "tabtrail"
+version = "0.1.0"
+edition = "2024"
+# File::lock/try_lock (used for concurrency-safe cache writes) are stable since 1.89.
+rust-version = "1.89"
+description = "Discovery-based dynamic Tab completion for existing Bash, Zsh and Fish shells on Linux"
+repository = "https://github.com/TNYCL/tabtrail"
+readme = "README.md"
+keywords = ["completion", "shell", "bash", "zsh", "fish"]
+categories = ["command-line-utilities"]
+# No `license` field yet: the license is an open owner decision (see RELEASING.md).
+# Publishing is fail-closed until the owner approves a license and registry setup.
+publish = false
+include = [
+    "/src/**",
+    "/shell/**",
+    "/tests/**",
+    "/Cargo.toml",
+    "/Cargo.lock",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/RELEASING.md",
+    "/docs/**",
+    # Project license texts, once the owner has chosen a license.
+    "/LICENSE*",
+    "/LICENCE*",
+    "/COPYING*",
+]
+
+[dependencies]
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
+rustix = { version = "1.1.5", default-features = false, features = ["std", "process", "fs"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.152"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

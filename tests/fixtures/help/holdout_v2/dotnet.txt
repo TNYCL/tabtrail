@@ -1,0 +1,14 @@
+Description:
+  A .NET CLI tool
+
+Usage:
+  netcli [command] [options]
+
+Options:
+  -o, --output <output>        Output directory
+  --format <json|text|xml>     Output format
+  -?, -h, --help               Show help and usage information
+
+Commands:
+  new <template>  Create something new
+  run             Run the project

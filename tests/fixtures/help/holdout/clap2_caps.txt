@@ -1,0 +1,20 @@
+archiver 2.4.1
+Packs and unpacks archives
+
+USAGE:
+    archiver [FLAGS] [OPTIONS] <SUBCOMMAND>
+
+FLAGS:
+    -h, --help       Prints help information
+    -q, --quiet      Suppress output
+    -V, --version    Prints version information
+
+OPTIONS:
+    -l, --level <level>          Compression level [default: 6]  [possible values: fast, normal, best]
+    -o, --output-dir <output>    Where to write results
+
+SUBCOMMANDS:
+    pack      Create an archive
+    unpack    Extract an archive
+    list      List archive contents
+    help      Prints this message or the help of the given subcommand(s)

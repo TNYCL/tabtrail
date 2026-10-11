@@ -1,0 +1,9 @@
+Usage of gotool:
+  -addr string
+    	listen address (default ":8080")
+  -debug
+    	enable debug mode
+  -mode value
+    	run mode: one of fast, safe
+  -n int
+    	number of workers (default 4)

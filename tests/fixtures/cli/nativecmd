@@ -1,0 +1,7 @@
+#!/bin/sh
+# Has a native completion in the test shells; its help lists `gamma`, which
+# must never appear because native completion takes precedence.
+printf '%s\n' "$*" >> "$HOME/nativecmd-invocations.log"
+case "$*" in
+  "--help") printf 'Usage: nativecmd <COMMAND>\n\nCommands:\n  gamma  Should never be offered\n' ;;
+esac

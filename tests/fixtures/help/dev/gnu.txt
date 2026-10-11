@@ -1,0 +1,17 @@
+Usage: gls [OPTION]... [FILE]...
+List information about the FILEs (the current directory by default).
+Use --force-all to really do it, and see -x for more.
+
+Mandatory arguments to long options are mandatory for short options too.
+  -a, --all                  do not ignore entries starting with .
+  -B, --ignore-backups       do not list implied entries ending with ~
+      --block-size=SIZE      with -l, scale sizes by SIZE when printing them;
+                               e.g., '--block-size=M'; see SIZE format below
+      --color[=WHEN]         color the output WHEN; more info below
+  -I, --ignore=PATTERN       do not list implied entries matching shell PATTERN
+      --sort=WORD            sort by WORD instead of name: none (-U), size (-S),
+                               time (-t), version (-v), extension (-X), width
+      --help        display this help and exit
+
+The WHEN argument defaults to 'always' and can also be 'auto' or 'never'.
+  -1 is mentioned here only in prose and has no table layout

@@ -1,0 +1,20 @@
+#!/bin/sh
+# Fake `docker` with hostile container names, for provider safety tests.
+# It honours only the arguments Tabtrail's provider passes. Every run is
+# logged so tests can tell Tabtrail's provider call (`--host ... ps`) apart
+# from shell-native loaders (e.g. bash-completion 2.16 runs
+# `docker completion bash` from its `_docker` fallback).
+printf '%s\n' "$*" >> "$HOME/docker-invocations.log"
+case "$*" in
+  *" ps --format {{.Names}}"*)
+    printf 'web-1\n'
+    printf 'x;touch PWNED_SEMI\n'
+    printf '$(touch PWNED_SUBST)\n'
+    printf '`touch PWNED_TICK`\n'
+    printf 'with space\n'
+    printf 'it'"'"'s\n'
+    printf 'esc\033]0;PWNED-TITLE\007name\n'
+    ;;
+  exec*) for a in "$@"; do printf 'ARG<%s>\n' "$a"; done ;;
+  *) exit 1 ;;
+esac

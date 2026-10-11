@@ -1,0 +1,13 @@
+Usage: clk [OPTIONS] COMMAND [ARGS]...
+
+  A click based tool.
+
+Options:
+  --level [debug|info|warning]  Log level
+  --dry-run / --no-dry-run      Do not change anything
+  -n, --name TEXT               Name to use
+  --help                        Show this message and exit.
+
+Commands:
+  publish  Publish a package
+  sync     Synchronise state

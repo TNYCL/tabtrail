@@ -1,0 +1,14 @@
+Usage: evil [OPTIONS]
+
+Options:
+  -x, --xfl[31mag[0m   colored ]0;pwneddescription
+  --ok          desc with ‮ bidi and  bell
+  --$(id)       not a flag name
+  --`whoami`    neither
+  -;rm          nope
+  --good-one    Fine
+
+Commands:
+  ok-cmd     Real command
+  $(reboot)  Not a command name
+  bad;name   Nope

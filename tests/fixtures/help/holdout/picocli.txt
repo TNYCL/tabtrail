@@ -1,0 +1,10 @@
+Usage: jtool [-hvV] [--threads=<threads>] [-f=<format>] [COMMAND]
+A Java command line tool.
+  -f, --format=<format>     Output format. Valid values: XML, JSON, CSV
+  -h, --help                Show this help message and exit.
+      --threads=<threads>   Worker threads
+  -v, --verbose             Verbose mode.
+  -V, --version             Print version information and exit.
+Commands:
+  import  Import data
+  export  Export data

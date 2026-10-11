@@ -1,0 +1,6 @@
+absl_tool: Runs the absl tool.
+
+  Flags from tool/main.cc:
+    --input (Input file path); default: "";
+    --max_items (Maximum items to process); default: 100;
+    --[no]fast (Use the fast path); default: false;

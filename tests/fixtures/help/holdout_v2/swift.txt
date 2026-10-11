@@ -1,0 +1,13 @@
+OVERVIEW: A Swift command-line tool.
+
+USAGE: swifty <subcommand>
+
+OPTIONS:
+  --log-level <log-level> Logging level (values: trace, debug, info)
+  -h, --help              Show help information.
+
+SUBCOMMANDS:
+  compile                 Compile sources.
+  test                    Run tests.
+
+  See 'swifty help <subcommand>' for detailed help.

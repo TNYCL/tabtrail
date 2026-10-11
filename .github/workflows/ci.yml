@@ -1,0 +1,159 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+# Least privilege: nothing in CI writes to the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    # GitHub runs explicit `bash` steps with `-eo pipefail`.
+    shell: bash
+
+env:
+  CARGO_TERM_COLOR: always
+  # Toolchain for release binaries: packaging/notices/STATIC-RUNTIME-NOTICES.txt
+  # is generated for this exact rustc commit (scripts/fetch-runtime-notices.sh);
+  # package.sh refuses to package musl binaries built by any other rustc.
+  RELEASE_TOOLCHAIN: "1.99.0"
+  RUST_BACKTRACE: "1"
+
+jobs:
+  lint:
+    name: fmt, clippy, shell lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy && rustup default stable
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --all-features --locked -- -D warnings
+      - name: Shell syntax and lint
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck zsh fish
+          bash -n shell/tabtrail.bash scripts/*.sh
+          zsh -n shell/tabtrail.zsh
+          fish --no-execute shell/tabtrail.fish
+          shellcheck -s bash shell/tabtrail.bash scripts/*.sh
+      - name: Python syntax (test drivers)
+        run: python3 -m py_compile tests/shell/*.py tests/ssh/*.py tests/bench/*.py scripts/*.py
+
+  test:
+    name: cargo test (${{ matrix.os }}, ${{ matrix.rust }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+        rust: [stable, "1.89"] # 1.89 = declared MSRV (rust-version)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: rustup toolchain install "${{ matrix.rust }}" --profile minimal && rustup default "${{ matrix.rust }}"
+      - run: cargo test --all-targets --all-features --locked
+
+  shells:
+    name: PTY + SSH (${{ matrix.base }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        base: ["ubuntu:24.04", "debian:trixie"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --target x86_64-unknown-linux-musl
+          rustup default stable
+      - name: Build static helper
+        run: cargo build --release --locked --target x86_64-unknown-linux-musl
+      - name: Build disposable test image
+        run: docker build -t tabtrail-test --build-arg BASE="${{ matrix.base }}" tests/docker
+      - name: Interactive Bash/Zsh/Fish (real Tab key over a PTY)
+        run: |
+          docker run --rm --user tester -e PYTHONDONTWRITEBYTECODE=1 -v "$PWD:/src:ro" tabtrail-test \
+            python3 /src/tests/shell/test_shells.py --require-all -v \
+            --tabtrail /src/target/x86_64-unknown-linux-musl/release/tabtrail
+      - name: Tab over SSH (container-local sshd, nothing exposed)
+        run: |
+          docker run --rm -e PYTHONDONTWRITEBYTECODE=1 -v "$PWD:/src:ro" tabtrail-test \
+            python3 /src/tests/ssh/ssh_test.py \
+            --tabtrail /src/target/x86_64-unknown-linux-musl/release/tabtrail
+
+  package:
+    name: package checks (no credentials)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain (pinned release toolchain)
+        run: |
+          rustup toolchain install "$RELEASE_TOOLCHAIN" --profile minimal --component rust-docs --target x86_64-unknown-linux-musl
+          rustup default "$RELEASE_TOOLCHAIN"
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq rpm file
+      - name: Release script tests (synthetic fixtures)
+        run: scripts/test-release-scripts.sh
+      - run: cargo build --release --locked --target x86_64-unknown-linux-musl
+      - name: Build packages and checksums
+        run: |
+          SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) \
+            scripts/package.sh x86_64-unknown-linux-musl target/x86_64-unknown-linux-musl/release/tabtrail dist
+      - name: Clean-environment smoke test
+        run: scripts/smoke-test.sh dist/tabtrail-*-x86_64-unknown-linux-musl.tar.gz dist/tabtrail_*_amd64.deb
+      - name: Verify checksums
+        run: cd dist && sha256sum --check SHA256SUMS
+      - name: cargo package (crate builds from its own tarball)
+        run: cargo package --locked
+      - name: Publication gate status (informational)
+        run: |
+          scripts/release-gate.sh github || echo "::notice::GitHub release publication is gated (see RELEASING.md)"
+          scripts/release-gate.sh crates || echo "::notice::crates.io publication is gated (see RELEASING.md)"
+
+  bench:
+    name: benchmark baseline (informational)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --target x86_64-unknown-linux-musl
+          rustup default stable
+      - run: cargo build --release --locked --target x86_64-unknown-linux-musl
+      - run: docker build -t tabtrail-test --build-arg BASE=ubuntu:24.04 tests/docker
+      - name: Run benchmark
+        run: |
+          mkdir -p bench-out && chmod 0777 bench-out
+          docker run --rm --user tester -e PYTHONDONTWRITEBYTECODE=1 -v "$PWD:/src:ro" -v "$PWD/bench-out:/out" tabtrail-test \
+            python3 /src/tests/bench/bench.py --iterations 500 --pty-iterations 40 \
+            --tabtrail /src/target/x86_64-unknown-linux-musl/release/tabtrail --json /out/bench.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bench-${{ github.sha }}
+          path: bench-out/bench.json
+          retention-days: 30
+          if-no-files-found: error

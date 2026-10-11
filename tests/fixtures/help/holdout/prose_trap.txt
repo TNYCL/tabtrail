@@ -1,0 +1,5 @@
+traptool - a tool whose help is mostly prose
+
+Run traptool with --frobnicate to frobnicate. You may also pass -x, but
+only on Tuesdays. Commands: there are none, really; see the manual.
+Options are documented online at https://example.invalid/--not-a-flag

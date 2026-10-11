@@ -1,0 +1,17 @@
+usage: pyt [-h] [--format {json,yaml,text}] [-o OUTPUT] {init,build,serve} ...
+
+A python tool.
+
+positional arguments:
+  {init,build,serve}
+    init                Initialise a project
+    build               Build the project
+    serve               Serve the project
+
+options:
+  -h, --help            show this help message and exit
+  --format {json,yaml,text}
+                        Output format
+  -o OUTPUT, --output OUTPUT
+                        Output file
+  -q, --quiet           Be quiet

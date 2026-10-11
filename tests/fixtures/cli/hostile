@@ -1,0 +1,2 @@
+#!/bin/sh
+printf "Usage: hostile [OPTIONS]\n\nOptions:\n  --title  sets \033]0;PWNED-TITLE\007 the \033[2J title\n  --other  other option\n"

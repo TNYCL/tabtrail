@@ -1,0 +1,3 @@
+#!/bin/sh
+# A command Tabtrail knows nothing about (not trusted, no man page).
+echo unknown "$@"

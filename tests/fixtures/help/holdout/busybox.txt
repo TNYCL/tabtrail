@@ -1,0 +1,8 @@
+BusyBox v1.36.1 multi-call binary.
+
+Usage: bbtool [-r] [-t TYPE] FILE...
+
+Pack things
+
+	-r	Recurse into directories
+	-t TYPE	Archive type

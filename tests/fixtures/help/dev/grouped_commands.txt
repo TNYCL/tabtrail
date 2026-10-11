@@ -1,0 +1,14 @@
+usage: vcsx [-v | --version] [-h | --help] [-C <path>]
+            <command> [<args>]
+
+These are common vcsx commands used in various situations:
+
+start a working area (see also: vcsx help tutorial)
+   clone      Clone a repository into a new directory
+   init       Create an empty repository
+
+work on the current change
+   add        Add file contents to the index
+   rm         Remove files from the working tree
+
+See 'vcsx help <command>' to read about a specific subcommand.

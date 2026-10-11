@@ -1,0 +1,16 @@
+Manage your cloud apps
+
+VERSION
+  cloudy/1.2.3 linux-x64 node-v20.0.0
+
+USAGE
+  $ cloudy [COMMAND]
+
+TOPICS
+  apps    manage apps
+  config  manage configuration
+
+COMMANDS
+  apps    manage apps
+  login   log in to the cloud
+  help    Display help for cloudy.

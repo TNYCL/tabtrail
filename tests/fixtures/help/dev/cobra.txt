@@ -1,0 +1,20 @@
+Kube-ish manages clusters.
+
+Usage:
+  kc [flags]
+  kc [command]
+
+Available Commands:
+  apply       Apply a configuration
+  completion  Generate the autocompletion script for the specified shell
+  get         Display one or many resources
+  help        Help about any command
+
+Flags:
+      --context string     The name of the context to use
+  -h, --help               help for kc
+  -n, --namespace string   Namespace scope
+  -o, --output string      Output format. One of: (json, yaml, wide)
+      --timeout duration   Request timeout (default 30s)
+
+Use "kc [command] --help" for more information about a command.

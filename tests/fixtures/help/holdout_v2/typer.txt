@@ -1,0 +1,14 @@
+
+ Usage: shipit [OPTIONS] COMMAND [ARGS]...
+
+ Ship things quickly.
+
+╭─ Options ────────────────────────────────────────────────────────────╮
+│ --region          [eu|us|ap]  Target region [default: eu]            │
+│ --verbose  -v                 Verbose output                         │
+│ --help                        Show this message and exit.            │
+╰──────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────╮
+│ launch   Launch a release                                            │
+│ recall   Recall a release                                            │
+╰──────────────────────────────────────────────────────────────────────╯
