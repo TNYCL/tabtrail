@@ -7,9 +7,9 @@ locally installed metadata, caches the result, and answers on the ordinary
 Tab key. There is no new shell, terminal, prompt, account, network service or
 AI involved.
 
-> **Status: pre-release (0.1.0, unpublished).** The license has not been
-> chosen yet, so no binaries or crates are published. Everything below
-> works from a source build. See [Limitations](#limitations).
+> **Status: pre-release (0.1.0).** Tagged versions are distributed as
+> GitHub releases (static binaries, `.deb`, `.rpm`); the crate is not
+> published on crates.io. See [Limitations](#limitations).
 
 ## How it works
 
@@ -48,8 +48,9 @@ install -m 0755 target/release/tabtrail ~/.local/bin/tabtrail   # or any directo
 ```
 
 Release archives, `.deb` and `.rpm` packages are produced by the release
-workflow (see [RELEASING.md](RELEASING.md)); they install only the binary and
-docs and never modify your shell configuration.
+workflow (see [RELEASING.md](RELEASING.md)); they install only the binary,
+docs, license texts and notices, and never modify your shell configuration.
+Verify downloads against the release's `SHA256SUMS`.
 
 ## Enable / disable
 
@@ -190,5 +191,20 @@ Security model: [docs/SECURITY.md](docs/SECURITY.md).
 
 ## License
 
-Not yet selected. Until a license is chosen by the owner, no rights are
-granted beyond viewing the source, and nothing is published.
+Licensed under either of
+
+* Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or
+  <https://www.apache.org/licenses/LICENSE-2.0>)
+* MIT license ([LICENSE-MIT](LICENSE-MIT) or <https://opensource.org/license/mit>)
+
+at your option (SPDX: `MIT OR Apache-2.0`).
+
+Unless you explicitly state otherwise, any contribution intentionally
+submitted for inclusion in the work by you, as defined in the Apache-2.0
+license, shall be dual licensed as above, without any additional terms or
+conditions.
+
+Release binaries also contain third-party code (Rust crates, the Rust
+standard library, musl libc and LLVM runtime objects) under their own
+licenses; their notices are shipped in `THIRD-PARTY-NOTICES.txt` and
+`notices/` inside every archive and package.

@@ -81,15 +81,27 @@ composed command executed.
 ## Release scripts and packages
 
 ```sh
-scripts/test-release-scripts.sh   # gate/version/packaging on synthetic fixture repos
+scripts/test-release-scripts.sh   # gate/policy/version/packaging on fixture repos
+scripts/check-release-policy.sh   # the real repository: github gate open, crates.io deferred
 ```
 
-Covers the publication gate (license field vs. files, `license-file`,
-`[package]` scoping, notices, maintainer, `publish = false`), version/tag/
-changelog checks, and that every license file, the third-party and toolchain
-notices end up in the tarball, `.deb` (including a combined `copyright`) and
-`.rpm`. The fixtures use `LicenseRef-TestFixture-*` identifiers; they do not
-choose a license for Tabtrail.
+Covers the publication gate: license field vs. files, `license-file`,
+`[package]` scoping; the project's `MIT OR Apache-2.0` passing for GitHub
+but denied for crates.io by `publish = false`; either dual-license text
+missing, empty, blank, holding the wrong license or an unfilled MIT
+copyright line; absent, empty, malformed, multi-line or placeholder
+maintainers; missing or empty runtime notices. Denials must exit 1 *and*
+name the expected blocker. Also covered: the policy check, version/tag/
+changelog checks, refusal to package without license or maintainer, and
+that both full license texts (byte-identical), the third-party and
+toolchain notices and the maintainer end up in the tarball, `.deb`
+(`copyright`, `Maintainer`), `.rpm` (`%license`, `License`, `Packager`) and
+the crate. Packaging under umask 027 and 077 (from a checkout created
+under that umask) must succeed and produce byte-identical artifacts with
+public payload and artifact modes. Failing package builds print their
+output. Other fixtures use synthetic `LicenseRef-TestFixture-*`
+identifiers. `scripts/smoke-test.sh` checks the same license texts and
+metadata in the real artifacts.
 
 The release workflow's clean-install job (checksums, native package
 install, notices present in the package, `tabtrail install`/`uninstall`

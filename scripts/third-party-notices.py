@@ -4,8 +4,8 @@
 Uses `cargo metadata` (locked, offline once dependencies are fetched) to
 walk the normal-dependency closure of the `tabtrail` package, and copies
 each crate's own license/notice files verbatim. This documents the
-licenses of *dependencies* only; it implies nothing about Tabtrail's own
-license, which is an open owner decision.
+licenses of *dependencies*; Tabtrail's own license texts are shipped
+separately (LICENSE-MIT, LICENSE-APACHE).
 
   python3 scripts/third-party-notices.py OUTPUT_FILE [RUST_TARGET_TRIPLE]
 """
@@ -57,7 +57,10 @@ def main():
         "The tabtrail binary is built from the following crates (those marked",
         "'build time' run only during compilation and are not linked in).",
         "Each crate's license expression and its license/notice files are",
-        "reproduced below. This list does not state a license for tabtrail itself.",
+        "reproduced below.",
+        "",
+        f"tabtrail itself: {pkgs[root].get('license') or 'see its license files'}"
+        " (its own license texts are shipped next to this file).",
         "",
     ]
     for p in crates:

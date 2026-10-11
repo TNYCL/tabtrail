@@ -7,11 +7,15 @@ name: Release
 #     - repository variables TABTRAIL_GITHUB_RELEASE / TABTRAIL_CRATES_PUBLISH
 #       must be 'true',
 #     - the protected environments `release` / `crates-io` must approve,
-#     - scripts/release-gate.sh must pass (license, notices, maintainer).
+#     - scripts/release-gate.sh must pass (license texts, notices, maintainer).
+#   crates.io publication is currently deferred by the owner (`publish =
+#   false`); scripts/check-release-policy.sh enforces that in `verify`.
 # * Manual run (workflow_dispatch): build-only release candidate for the
 #   selected branch/ref. `version` is a *candidate* version string checked
 #   against Cargo.toml, Cargo.lock and CHANGELOG.md; no Git tag needs to
-#   exist and none is created. Manual runs never publish anything.
+#   exist and none is created. Manual runs never publish anything; their
+#   `release-files` artifact can be attached to an existing draft release by
+#   hand.
 #
 # Every job checks out the immutable commit `github.sha` (the tagged commit
 # for a tag push, the selected ref's commit at dispatch time).
@@ -62,6 +66,8 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
       - name: Version (tag or candidate) matches Cargo.toml, Cargo.lock and CHANGELOG
         run: scripts/check-version.sh "$TAG"
+      - name: Publication policy (GitHub gate must pass; crates.io must stay denied by publish = false only)
+        run: scripts/check-release-policy.sh
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --all-features --locked -- -D warnings
       - run: cargo test --all-targets --all-features --locked
@@ -78,9 +84,11 @@ jobs:
           - target: x86_64-unknown-linux-musl
             os: ubuntu-24.04
             deb: amd64
+            rpm: x86_64
           - target: aarch64-unknown-linux-musl
             os: ubuntu-24.04-arm
             deb: arm64
+            rpm: aarch64
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -90,14 +98,16 @@ jobs:
         run: |
           rustup toolchain install "$RELEASE_TOOLCHAIN" --profile minimal --component rust-docs --target "${{ matrix.target }}"
           rustup default "$RELEASE_TOOLCHAIN"
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq rpm file
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq rpm file cpio
       - run: cargo build --release --locked --target "${{ matrix.target }}"
       - name: Package
         run: |
           SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) \
             scripts/package.sh "${{ matrix.target }}" "target/${{ matrix.target }}/release/tabtrail" dist
-      - name: Smoke test on the build architecture
-        run: scripts/smoke-test.sh dist/tabtrail-*-"${{ matrix.target }}".tar.gz dist/tabtrail_*_"${{ matrix.deb }}".deb
+      - name: Smoke test on the build architecture (license texts and maintainer in every package)
+        run: |
+          scripts/smoke-test.sh dist/tabtrail-*-"${{ matrix.target }}".tar.gz \
+            dist/tabtrail_*_"${{ matrix.deb }}".deb dist/tabtrail-*."${{ matrix.rpm }}".rpm
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist-${{ matrix.target }}
@@ -156,12 +166,16 @@ jobs:
           if command -v dpkg >/dev/null; then
             contents=$(dpkg-deb --contents dist/tabtrail_*_amd64.deb)
             dpkg -i dist/tabtrail_*_amd64.deb
+            licenses=share/doc/tabtrail
           else
             contents=$(rpm -qlp dist/tabtrail-*.x86_64.rpm)
             rpm -i dist/tabtrail-*.x86_64.rpm
+            licenses=share/licenses/tabtrail
           fi
           grep -q 'share/doc/tabtrail/THIRD-PARTY-NOTICES.txt$' <<<"$contents"
           grep -q 'share/doc/tabtrail/notices/rust-toolchain/' <<<"$contents"
+          grep -q "$licenses/LICENSE-MIT\$" <<<"$contents"
+          grep -q "$licenses/LICENSE-APACHE\$" <<<"$contents"
           tabtrail --version
       - name: Install and remove shell integration in a temporary HOME
         run: |
@@ -199,11 +213,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd dist && sha256sum --check SHA256SUMS && cd ..
+          # Never create a second release for the same tag (e.g. a draft that
+          # was prepared by hand from a build-only candidate).
+          existing=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.tag_name == \"$TAG\") | .id")
+          if [[ -n $existing ]]; then
+            echo "::error::a release for $TAG already exists (id $existing); update it instead of creating a duplicate draft"
+            exit 1
+          fi
           version=${TAG#v}
           {
             echo "> **Draft created by the release workflow — review before publishing.**"
-            echo "> Confirm that the license files, package maintainer/contact metadata and"
-            echo "> runtime notices inside the attached artifacts are the final ones. If any"
+            echo "> Confirm that the license texts (LICENSE-MIT, LICENSE-APACHE), package"
+            echo "> maintainer/contact metadata and runtime notices inside the attached"
+            echo "> artifacts are the final ones. If any"
             echo "> of them changed after this tag was built, update them, tag a new version"
             echo "> and let the workflow rebuild the packages instead of publishing this draft."
             echo

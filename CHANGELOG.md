@@ -21,3 +21,5 @@ First implementation.
 - Git branch and Docker container providers with context checks.
 - `install`/`uninstall` with exact, reversible rc-file blocks.
 - PTY, SSH, generalization and safety test suites; benchmarks.
+- Licensed under `MIT OR Apache-2.0`; every archive, package and the crate
+  ships both license texts and the third-party notices.

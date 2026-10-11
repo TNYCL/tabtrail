@@ -8,24 +8,31 @@
 # and (re)writes SHA256SUMS for everything in <out-dir>.
 # Packages install only the binary and documentation: shell integration is
 # enabled per user with `tabtrail install`, never by package scripts.
-# Every package carries THIRD-PARTY-NOTICES.txt (licenses of the linked
-# dependencies). Tabtrail's own license is an open owner decision: until it
-# is chosen, packages carry no project license file and the RPM License tag
-# is the draft marker below; publication is blocked by release-gate.sh.
+# Every package carries the project's license texts (all LICENSE*/LICENCE*/
+# COPYING* files), the license expression from Cargo.toml, the maintainer from
+# packaging/MAINTAINER (or PACKAGE_MAINTAINER), THIRD-PARTY-NOTICES.txt
+# (licenses of the linked crates) and notices/ (Rust toolchain and static
+# runtime notices). Packaging refuses to run without license or maintainer;
+# whether the result may be published is decided by release-gate.sh.
 set -euo pipefail
 shopt -s nullglob
+# Artifacts and their payloads are public: the caller's umask (e.g. 027 or
+# 077) must not leak into them, and dpkg-deb rejects a DEBIAN directory that
+# is not 0755..0775. The staging directory stays private (mktemp -d is 0700).
+umask 022
 target=${1:?target}; bin=${2:?binary}; out=${3:?out dir}
 root=${TABTRAIL_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}
 version=$(sed -n 's/^version = "\(.*\)"$/\1/p;T;q' "$root/Cargo.toml")
-license=$(sed -n 's/^license *= *"\(.*\)" *$/\1/p;T;q' "$root/Cargo.toml")
-# Draft marker until the owner selects a license (publication is gated).
-license=${license:-LicenseRef-Unselected-Draft}
-# Owner-provided contact; the placeholder blocks publication (release-gate.sh).
+license=$(awk '/^\[/{p = ($0 == "[package]")} p' "$root/Cargo.toml" | sed -n 's/^license *= *"\(.*\)" *$/\1/p;T;q')
+[[ -n $license ]] || { echo "error: no license expression in $root/Cargo.toml" >&2; exit 1; }
+# The project's license texts, all of them (e.g. both texts of a dual license).
+licfiles=("$root"/LICENSE* "$root"/LICENCE* "$root"/COPYING*)
+((${#licfiles[@]})) || { echo "error: no license files (LICENSE*) in $root" >&2; exit 1; }
 maintainer=${PACKAGE_MAINTAINER:-}
-if [[ -z $maintainer && -s "$root/packaging/MAINTAINER" ]]; then
-    maintainer=$(sed -n '1{p;q}' "$root/packaging/MAINTAINER")
+if [[ -z $maintainer && -f "$root/packaging/MAINTAINER" ]]; then
+    maintainer=$(sed -n '/[^[:space:]]/{p;q}' "$root/packaging/MAINTAINER")
 fi
-maintainer=${maintainer:-Tabtrail maintainers (unassigned) <maintainers@tabtrail.invalid>}
+[[ -n $maintainer ]] || { echo "error: no package maintainer (packaging/MAINTAINER)" >&2; exit 1; }
 case $target in
     x86_64-*) deb_arch=amd64; rpm_arch=x86_64 ;;
     aarch64-*) deb_arch=arm64; rpm_arch=aarch64 ;;
@@ -76,10 +83,12 @@ fi
 # Statically linked C runtime notices, once provided (see RELEASING.md).
 for f in "$root"/packaging/notices/*; do cp "$f" "$work/notices/"; done
 cp "$work/THIRD-PARTY-NOTICES.txt" "$work/notices/"
+# Copies keep their source modes (a checkout made under umask 077 has 0600
+# files); give the notices tree fixed public modes before it is shipped.
+find "$work/notices" -type d -exec chmod 0755 {} +
+find "$work/notices" -type f -exec chmod 0644 {} +
 
 docs=(README.md CHANGELOG.md docs/SECURITY.md docs/ARCHITECTURE.md)
-# The owner's project license files, all of them (e.g. dual licenses).
-licfiles=("$root"/LICENSE* "$root"/LICENCE* "$root"/COPYING*)
 
 # tarball
 name="tabtrail-$version-$target"
@@ -103,9 +112,14 @@ if command -v dpkg-deb >/dev/null; then
     # Every license file is kept under its own name, and `copyright`
     # concatenates all of them (never overwritten by the last one).
     {
-        echo "tabtrail $version"
-        echo "Project license: ${license:-not yet selected by the owner}"
-        echo "Third-party notices: /usr/share/doc/tabtrail/THIRD-PARTY-NOTICES.txt and notices/"
+        echo "Upstream-Name: tabtrail"
+        echo "Upstream-Contact: $maintainer"
+        echo "Source: https://github.com/TNYCL/tabtrail"
+        echo "License: $license"
+        echo
+        echo "The full text of each license follows; the same files are installed in"
+        echo "/usr/share/doc/tabtrail/. Licenses of the third-party code linked into the"
+        echo "binary: /usr/share/doc/tabtrail/THIRD-PARTY-NOTICES.txt and notices/."
         for l in "${licfiles[@]}"; do
             install -m 0644 "$l" "$d/usr/share/doc/tabtrail/"
             printf '\n===== %s =====\n' "$(basename "$l")"
@@ -137,10 +151,10 @@ if command -v rpmbuild >/dev/null; then
     cp "$work/THIRD-PARTY-NOTICES.txt" "$r/SOURCES/"
     cp -r "$work/notices" "$r/SOURCES/notices"
     mkdir -p "$r/SOURCES/licenses"
-    license_files_entry=""
+    license_files_entry="%dir %{_datadir}/licenses/tabtrail"
     for l in "${licfiles[@]}"; do
         cp "$l" "$r/SOURCES/licenses/"
-        license_files_entry="%{_datadir}/licenses/tabtrail"
+        license_files_entry+=$'\n'"%license %{_datadir}/licenses/tabtrail/$(basename "$l")"
     done
     cat > "$r/SPECS/tabtrail.spec" <<SPEC
 Name: tabtrail
@@ -148,6 +162,7 @@ Version: $version
 Release: 1
 Summary: Discovery-based Tab completion for Bash, Zsh and Fish
 License: $license
+Packager: $maintainer
 URL: https://github.com/TNYCL/tabtrail
 BuildArch: $rpm_arch
 %description
@@ -160,10 +175,8 @@ install -D -m 0755 %{_sourcedir}/tabtrail %{buildroot}%{_bindir}/tabtrail
 install -d %{buildroot}%{_docdir}/tabtrail
 install -m 0644 %{_sourcedir}/*.md %{_sourcedir}/THIRD-PARTY-NOTICES.txt %{buildroot}%{_docdir}/tabtrail/
 cp -r %{_sourcedir}/notices %{buildroot}%{_docdir}/tabtrail/notices
-if [ -n "\$(ls -A %{_sourcedir}/licenses)" ]; then
-    install -d %{buildroot}%{_datadir}/licenses/tabtrail
-    cp %{_sourcedir}/licenses/* %{buildroot}%{_datadir}/licenses/tabtrail/
-fi
+install -d %{buildroot}%{_datadir}/licenses/tabtrail
+install -m 0644 %{_sourcedir}/licenses/* %{buildroot}%{_datadir}/licenses/tabtrail/
 %files
 %{_bindir}/tabtrail
 %{_docdir}/tabtrail

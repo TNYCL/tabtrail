@@ -1,7 +1,28 @@
 # Releasing
 
 Build, test and packaging never need credentials. Publication is opt-in
-and fail-closed until the owner has made the decisions listed below.
+and fail-closed (`scripts/release-gate.sh`). GitHub releases are open to
+publication; crates.io publication is deferred by the owner (`publish =
+false`).
+
+## Project license and maintainer
+
+Tabtrail is licensed under `MIT OR Apache-2.0` (either license, at the
+user's option), copyright 2026 TNYCL. Package maintainer: `TNYCL
+<tunaycl@outlook.com>` (`packaging/MAINTAINER`, also `authors` in
+`Cargo.toml`).
+
+| File | Source |
+| --- | --- |
+| `LICENSE-APACHE` | <https://www.apache.org/licenses/LICENSE-2.0.txt>, verbatim (SHA-256 `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30`) |
+| `LICENSE-MIT` | <https://opensource.org/license/mit>, text as published there with `<YEAR> <COPYRIGHT HOLDER>` filled in as `2026 TNYCL` |
+
+The license texts, the license expression and the maintainer appear in
+every artifact: tarball (top level), `.deb` (`/usr/share/doc/tabtrail/`
+and its `copyright` file, `Maintainer` field), `.rpm` (`%license` files in
+`/usr/share/licenses/tabtrail/`, `License` and `Packager` tags) and the
+crate (`cargo package`). Third-party license terms are kept separately and
+unchanged (see Notices below).
 
 ## Artifacts
 
@@ -10,9 +31,9 @@ static binaries):
 
 | File | Content |
 | --- | --- |
-| `tabtrail-<version>-<target>.tar.gz` | binary, `THIRD-PARTY-NOTICES.txt`, `notices/`, docs, project license files (once chosen) |
-| `tabtrail_<version>_<amd64\|arm64>.deb` | `/usr/bin/tabtrail`, docs and notices in `/usr/share/doc/tabtrail/` |
-| `tabtrail-<version>-1.<x86_64\|aarch64>.rpm` | `/usr/bin/tabtrail`, docs, notices, licenses in `/usr/share/licenses/tabtrail/` |
+| `tabtrail-<version>-<target>.tar.gz` | binary, `LICENSE-MIT`, `LICENSE-APACHE`, `THIRD-PARTY-NOTICES.txt`, `notices/`, docs |
+| `tabtrail_<version>_<amd64\|arm64>.deb` | `/usr/bin/tabtrail`; docs, license texts, `copyright` and notices in `/usr/share/doc/tabtrail/` |
+| `tabtrail-<version>-1.<x86_64\|aarch64>.rpm` | `/usr/bin/tabtrail`, docs, notices, license texts in `/usr/share/licenses/tabtrail/` |
 | `SHA256SUMS` | SHA-256 of every artifact |
 
 Packages contain no maintainer scripts; shell integration stays a per-user
@@ -22,12 +43,17 @@ Reproducibility: with the same inputs, Rust toolchain, packaging tools
 (`tar`/`gzip`, `dpkg-deb`, `rpmbuild` version) and `SOURCE_DATE_EPOCH` (the
 release workflow uses the commit time), `package.sh` produces byte-identical
 tarballs, `.deb` and `.rpm` files: RPM build time, build host and payload
-mtimes are derived from `SOURCE_DATE_EPOCH`. Verified by double builds with
+mtimes are derived from `SOURCE_DATE_EPOCH`. Neither the caller's umask
+(e.g. 027 or 077) nor the file modes of the checkout affect the result:
+`package.sh` uses umask 022 and fixed public modes (0755 directories and
+executables, 0644 files) for everything it ships, and its output files are
+world-readable. Verified by double builds with
 rpm 4.18.2 (Ubuntu 24.04) and 4.20.1 (Debian 13) and by
 `scripts/test-release-scripts.sh`. Different versions of the packaging tools
 produce different (equally valid) bytes.
 
-Notices:
+Notices (third-party code in the binary; all permissive licenses, kept
+verbatim):
 
 * `THIRD-PARTY-NOTICES.txt` — license expressions and verbatim license files
   of the crates in the dependency graph (`scripts/third-party-notices.py`).
@@ -63,9 +89,13 @@ The workflow checks out the exact commit of the selected ref
 (`github.sha`), validates the *candidate* version string against
 `Cargo.toml`, `Cargo.lock` and `CHANGELOG.md` (it does not require or create
 a Git tag), runs fmt/clippy/tests, builds and packages both architectures,
-smoke-tests each on its build architecture, combines checksums, and installs
-the native packages on clean Ubuntu 24.04, Debian 13 and Fedora containers.
-Artifacts are kept as workflow artifacts (`release-files`, 30 days).
+smoke-tests each on its build architecture (including the license texts,
+maintainer and license metadata of the tarball, `.deb` and `.rpm`),
+combines checksums, and installs the native packages on clean Ubuntu 24.04,
+Debian 13 and Fedora containers. Its `verify` job also runs
+`scripts/check-release-policy.sh` (see below). Artifacts are kept as
+workflow artifacts (`release-files`, 30 days); a candidate's files can be
+attached to an existing draft release by hand.
 
 **Tag release**: pushing `v<version>` runs the same jobs on the tagged commit
 (`scripts/check-version.sh` verifies tag ↔ version). The publication jobs
@@ -77,33 +107,51 @@ run only for tag pushes and only if all of these hold:
 3. `scripts/release-gate.sh` passes.
 
 The GitHub job creates a **draft** release whose notes start with a
-checklist; review it and publish manually. crates.io publishing uses trusted
-publishing (OIDC, `rust-lang/crates-io-auth-action`), so no long-lived token
-is stored.
+checklist; review it and publish manually. It refuses to run if a release
+(draft or not) for the tag already exists, instead of creating a duplicate.
+The crates.io job is prepared for trusted publishing (OIDC,
+`rust-lang/crates-io-auth-action`, no long-lived token), but crates.io
+publication is deferred: with `publish = false` its gate always fails.
 
 ## Publication gate
 
-`scripts/release-gate.sh github|crates` fails, listing every blocker, until:
+`scripts/release-gate.sh github|crates` exits 1, listing every blocker,
+unless:
 
-* **License** (owner decision): `Cargo.toml` has a non-empty `license` (SPDX
-  expression) or an existing `license-file`, and the repository has the
-  license file(s) (`LICENSE*`, `LICENCE*` or `COPYING*`). All such files are
-  shipped in every artifact.
-* **Static runtime notices** present (`packaging/notices/STATIC-RUNTIME-NOTICES.txt`,
-  generated as described above; already provided).
-* **Maintainer/contact** (owner input): `packaging/MAINTAINER` — one line,
-  `Name <contact>`, used for the `.deb` `Maintainer` field (the default is a
-  placeholder `…@tabtrail.invalid`).
+* **License**: `Cargo.toml` has a non-empty `license` (SPDX expression) or an
+  existing `license-file`; the repository has license files (`LICENSE*`,
+  `LICENCE*`, `COPYING*`), none of them blank; every license of a compound
+  expression has its own full text (`MIT` → `LICENSE-MIT`, `Apache-2.0` →
+  `LICENSE-APACHE`, otherwise `LICENSE-<id>`); `LICENSE-MIT` holds the MIT
+  text with a filled-in copyright line and `LICENSE-APACHE` the complete
+  Apache License 2.0.
+* **Static runtime notices** present and not empty
+  (`packaging/notices/STATIC-RUNTIME-NOTICES.txt`, generated as described
+  above).
+* **Maintainer/contact**: `packaging/MAINTAINER` is exactly one
+  `Name <address@domain>` line, not a placeholder (reserved domains such as
+  `.invalid`/`example.com`, or words like `unassigned`/`TODO`). Used for the
+  `.deb` `Maintainer` field and the RPM `Packager` tag.
 * crates.io only: `publish = false` removed from `Cargo.toml`.
 
-If any of these change after a candidate was built, rebuild — never publish
-artifacts that were built before the change.
+`scripts/check-release-policy.sh` (CI `package` job, release `verify` job)
+encodes the current decision: the `github` gate must pass and the `crates`
+gate must be denied by `publish = false` and nothing else. A regression in
+license texts, notices or maintainer metadata therefore fails CI. When the
+owner approves crates.io publication, remove `publish = false` and update
+that script in the same change.
+
+`scripts/package.sh` refuses to build packages without a license expression,
+license files or maintainer. If any of these change after a candidate was
+built, rebuild — never publish artifacts that were built before the change.
 
 ## One-time setup (owner)
 
-1. Choose the license; add `license = "…"` to `Cargo.toml` and the license
-   file(s); remove `publish = false` when crates.io publication is approved.
-2. Add `packaging/MAINTAINER` (`Name <contact>`).
+1. Done: license (`MIT OR Apache-2.0`, `LICENSE-MIT`, `LICENSE-APACHE`)
+   and maintainer (`packaging/MAINTAINER`).
+2. crates.io (deferred, needs a separate owner approval): remove
+   `publish = false`, update `scripts/check-release-policy.sh`, and set up
+   the registry connection in step 5.
 3. GitHub → Settings → Environments: create `release` and `crates-io`, each
    with required reviewers and a deployment rule limited to tags `v*`.
 4. GitHub → Settings → Variables: set `TABTRAIL_GITHUB_RELEASE` /
@@ -125,10 +173,12 @@ artifacts that were built before the change.
 
 ```sh
 scripts/check-version.sh v0.1.0
-scripts/test-release-scripts.sh            # synthetic fixtures only
+scripts/test-release-scripts.sh            # fixture repositories only
 cargo build --release --locked --target x86_64-unknown-linux-musl
 scripts/package.sh x86_64-unknown-linux-musl target/x86_64-unknown-linux-musl/release/tabtrail dist
-scripts/smoke-test.sh dist/tabtrail-*-x86_64-unknown-linux-musl.tar.gz dist/tabtrail_*_amd64.deb
+scripts/smoke-test.sh dist/tabtrail-*-x86_64-unknown-linux-musl.tar.gz dist/tabtrail_*_amd64.deb \
+    dist/tabtrail-*.x86_64.rpm             # the .rpm needs rpm, rpm2cpio and cpio
 scripts/fetch-runtime-notices.sh           # only when the release toolchain changes
-scripts/release-gate.sh github             # currently blocked: license, maintainer
+scripts/release-gate.sh github             # open
+scripts/check-release-policy.sh            # github open, crates.io denied only by publish = false
 ```

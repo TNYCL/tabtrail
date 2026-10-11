@@ -4,13 +4,15 @@ version = "0.1.0"
 edition = "2024"
 # File::lock/try_lock (used for concurrency-safe cache writes) are stable since 1.89.
 rust-version = "1.89"
+authors = ["TNYCL <tunaycl@outlook.com>"]
 description = "Discovery-based dynamic Tab completion for existing Bash, Zsh and Fish shells on Linux"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/TNYCL/tabtrail"
 readme = "README.md"
 keywords = ["completion", "shell", "bash", "zsh", "fish"]
 categories = ["command-line-utilities"]
-# No `license` field yet: the license is an open owner decision (see RELEASING.md).
-# Publishing is fail-closed until the owner approves a license and registry setup.
+# crates.io publication is deferred by the owner; scripts/check-release-policy.sh
+# (run in CI) fails if this is removed without changing that policy.
 publish = false
 include = [
     "/src/**",
@@ -22,7 +24,7 @@ include = [
     "/CHANGELOG.md",
     "/RELEASING.md",
     "/docs/**",
-    # Project license texts, once the owner has chosen a license.
+    # Project license texts (LICENSE-MIT, LICENSE-APACHE).
     "/LICENSE*",
     "/LICENCE*",
     "/COPYING*",
