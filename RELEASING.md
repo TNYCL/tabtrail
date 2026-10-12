@@ -1,9 +1,8 @@
 # Releasing
 
 Build, test and packaging never need credentials. Publication is opt-in
-and fail-closed (`scripts/release-gate.sh`). GitHub releases are open to
-publication; crates.io publication is deferred by the owner (`publish =
-false`).
+and fail-closed (`scripts/release-gate.sh`). GitHub releases and crates.io
+publication are both approved by the owner.
 
 ## Project license and maintainer
 
@@ -109,9 +108,11 @@ run only for tag pushes and only if all of these hold:
 The GitHub job creates a **draft** release whose notes start with a
 checklist; review it and publish manually. It refuses to run if a release
 (draft or not) for the tag already exists, instead of creating a duplicate.
-The crates.io job is prepared for trusted publishing (OIDC,
-`rust-lang/crates-io-auth-action`, no long-lived token), but crates.io
-publication is deferred: with `publish = false` its gate always fails.
+The crates.io job runs after the GitHub job. It uses the
+`CARGO_REGISTRY_TOKEN` secret of the `crates-io` environment when that
+secret is set (needed once: trusted publishing works only for crates that
+already exist), otherwise trusted publishing (OIDC,
+`rust-lang/crates-io-auth-action`, no long-lived token).
 
 ## Publication gate
 
@@ -135,11 +136,9 @@ unless:
 * crates.io only: `publish = false` removed from `Cargo.toml`.
 
 `scripts/check-release-policy.sh` (CI `package` job, release `verify` job)
-encodes the current decision: the `github` gate must pass and the `crates`
-gate must be denied by `publish = false` and nothing else. A regression in
-license texts, notices or maintainer metadata therefore fails CI. When the
-owner approves crates.io publication, remove `publish = false` and update
-that script in the same change.
+encodes the current decision: both the `github` and the `crates` gate must
+pass. A regression in license texts, notices or maintainer metadata, or a
+reintroduced `publish = false`, therefore fails CI.
 
 `scripts/package.sh` refuses to build packages without a license expression,
 license files or maintainer. If any of these change after a candidate was
@@ -149,16 +148,20 @@ built, rebuild — never publish artifacts that were built before the change.
 
 1. Done: license (`MIT OR Apache-2.0`, `LICENSE-MIT`, `LICENSE-APACHE`)
    and maintainer (`packaging/MAINTAINER`).
-2. crates.io (deferred, needs a separate owner approval): remove
-   `publish = false`, update `scripts/check-release-policy.sh`, and set up
-   the registry connection in step 5.
-3. GitHub → Settings → Environments: create `release` and `crates-io`, each
-   with required reviewers and a deployment rule limited to tags `v*`.
+2. Done: crates.io publication approved (`publish = false` removed).
+3. Done: environments `release` and `crates-io`, each with a required
+   reviewer and a deployment rule limited to tags `v*`.
 4. GitHub → Settings → Variables: set `TABTRAIL_GITHUB_RELEASE` /
    `TABTRAIL_CRATES_PUBLISH` to `true` only when releases should be published.
-5. crates.io: after the first manual publish of the crate name (crates.io
-   requires the crate to exist), configure *Trusted Publishing* for repository
-   `TNYCL/tabtrail`, workflow `release.yml`, environment `crates-io`.
+5. crates.io (trusted publishing works only for crates that already exist).
+   For the first release, create an API token at
+   <https://crates.io/settings/tokens> with the scopes `publish-new` and
+   `publish-update`, crate `tabtrail` and a short expiry, and save it as the
+   `CARGO_REGISTRY_TOKEN` secret of the `crates-io` environment. After the
+   first release, add a trusted publisher on the crate's settings page
+   (repository `TNYCL/tabtrail`, workflow `release.yml`, environment
+   `crates-io`), then delete the secret and revoke the token. Without the
+   secret the workflow uses trusted publishing.
 6. Optional: restrict who can push `v*` tags (tag protection rules).
 
 ## Per release
@@ -180,5 +183,5 @@ scripts/smoke-test.sh dist/tabtrail-*-x86_64-unknown-linux-musl.tar.gz dist/tabt
     dist/tabtrail-*.x86_64.rpm             # the .rpm needs rpm, rpm2cpio and cpio
 scripts/fetch-runtime-notices.sh           # only when the release toolchain changes
 scripts/release-gate.sh github             # open
-scripts/check-release-policy.sh            # github open, crates.io denied only by publish = false
+scripts/check-release-policy.sh            # github and crates.io gates open
 ```

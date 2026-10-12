@@ -2,7 +2,14 @@
 
 All notable changes are documented here. Versions follow semantic versioning.
 
-## [0.1.0] - unreleased
+## [0.1.1] - 2026-10-12
+
+- Published on crates.io (`cargo install tabtrail`). The release workflow
+  publishes the crate after approval on the `crates-io` environment, with a
+  `CARGO_REGISTRY_TOKEN` secret for the first release and trusted publishing
+  afterwards.
+
+## [0.1.0] - 2026-10-11
 
 First implementation.
 

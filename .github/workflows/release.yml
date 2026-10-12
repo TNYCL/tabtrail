@@ -8,8 +8,9 @@ name: Release
 #       must be 'true',
 #     - the protected environments `release` / `crates-io` must approve,
 #     - scripts/release-gate.sh must pass (license texts, notices, maintainer).
-#   crates.io publication is currently deferred by the owner (`publish =
-#   false`); scripts/check-release-policy.sh enforces that in `verify`.
+#   crates.io uses the `CARGO_REGISTRY_TOKEN` secret of the `crates-io`
+#   environment when it is set (first release only), otherwise trusted
+#   publishing (OIDC).
 # * Manual run (workflow_dispatch): build-only release candidate for the
 #   selected branch/ref. `version` is a *candidate* version string checked
 #   against Cargo.toml, Cargo.lock and CHANGELOG.md; no Git tag needs to
@@ -66,7 +67,7 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
       - name: Version (tag or candidate) matches Cargo.toml, Cargo.lock and CHANGELOG
         run: scripts/check-version.sh "$TAG"
-      - name: Publication policy (GitHub gate must pass; crates.io must stay denied by publish = false only)
+      - name: Publication policy (GitHub and crates.io gates must pass)
         run: scripts/check-release-policy.sh
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --all-features --locked -- -D warnings
@@ -242,19 +243,25 @@ jobs:
     environment: crates-io
     permissions:
       contents: read
-      id-token: write # crates.io trusted publishing (OIDC); no stored token
+      id-token: write # crates.io trusted publishing (OIDC)
+    env:
+      # A token is needed once, for the very first release (trusted publishing
+      # works only for crates that already exist); afterwards trusted publishing.
+      HAS_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
-      - name: Publication gate (license, publish = false removed)
+      - name: Publication gate (license, notices, maintainer, no publish = false)
         run: scripts/release-gate.sh crates
       - name: Toolchain
         run: rustup toolchain install stable --profile minimal && rustup default stable
       - run: cargo publish --locked --dry-run
-      - uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+      - name: Trusted publishing token
         id: auth
+        if: env.HAS_TOKEN != 'true'
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
       - run: cargo publish --locked
         env:
-          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}

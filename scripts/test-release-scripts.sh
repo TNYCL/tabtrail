@@ -55,10 +55,9 @@ ready() { # everything except the license
     echo "fixture static runtime notices" > "$1/packaging/notices/STATIC-RUNTIME-NOTICES.txt"
 }
 
-dual() { # the project's dual license, ready for publication on GitHub
+dual() { # the project's dual license, ready for publication (GitHub and crates.io)
     local d
-    d=$(fixture "$1" 'license = "MIT OR Apache-2.0"
-publish = false')
+    d=$(fixture "$1" 'license = "MIT OR Apache-2.0"')
     ready "$d"
     cp "$repo/LICENSE-MIT" "$repo/LICENSE-APACHE" "$d/"
     echo "$d"
@@ -110,8 +109,8 @@ expect_fail "gate: unknown target" gate "$d" pypi
 # --- the project's dual license: MIT OR Apache-2.0 ------------------------
 d=$(dual dual)
 expect_ok "gate: valid MIT OR Apache-2.0 opens github" gate "$d" github
-expect_blocked "gate: crates denied by publish = false" 'publish = false' gate "$d" crates
-expect_ok "policy: github open, crates deferred" policy "$d"
+expect_ok "gate: valid MIT OR Apache-2.0 opens crates" gate "$d" crates
+expect_ok "policy: github and crates.io open" policy "$d"
 for f in LICENSE-MIT LICENSE-APACHE; do
     mv "$d/$f" "$work/held"
     expect_blocked "gate: dual license without $f" "$f" gate "$d" github
@@ -161,11 +160,12 @@ expect_blocked "gate: dual license without static runtime notices" 'runtime noti
 expect_blocked "gate: empty static runtime notices" 'runtime notices' gate "$d" github
 expect_fail "policy: missing static runtime notices" policy "$d"
 
-# --- the CI publication policy: github open, crates.io deferred ------------
-d=$(dual policy-crates-open)
-sed -i '/^publish = false$/d' "$d/Cargo.toml"
-expect_ok "gate: crates opens once publish = false is removed" gate "$d" crates
-expect_blocked "policy: rejects an open crates.io gate while publication is deferred" 'crates' policy "$d"
+# --- the CI publication policy: github and crates.io open ------------------
+d=$(dual policy-publish-false)
+sed -i 's/^license = .*/&\npublish = false/' "$d/Cargo.toml"
+expect_ok "gate: publish = false does not affect github" gate "$d" github
+expect_blocked "gate: crates denied by publish = false" 'publish = false' gate "$d" crates
+expect_blocked "policy: rejects a reintroduced publish = false" 'publish = false' policy "$d"
 d=$(dual policy-extra-blocker)
 sed -i '/^license = /d' "$d/Cargo.toml"
 expect_fail "policy: rejects a closed github gate" policy "$d"

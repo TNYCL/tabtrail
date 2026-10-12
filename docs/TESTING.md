@@ -82,12 +82,13 @@ composed command executed.
 
 ```sh
 scripts/test-release-scripts.sh   # gate/policy/version/packaging on fixture repos
-scripts/check-release-policy.sh   # the real repository: github gate open, crates.io deferred
+scripts/check-release-policy.sh   # the real repository: github and crates.io gates open
 ```
 
 Covers the publication gate: license field vs. files, `license-file`,
 `[package]` scoping; the project's `MIT OR Apache-2.0` passing for GitHub
-but denied for crates.io by `publish = false`; either dual-license text
+and crates.io, crates.io denied by a reintroduced `publish = false`; either
+dual-license text
 missing, empty, blank, holding the wrong license or an unfilled MIT
 copyright line; absent, empty, malformed, multi-line or placeholder
 maintainers; missing or empty runtime notices. Denials must exit 1 *and*

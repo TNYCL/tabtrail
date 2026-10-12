@@ -7,9 +7,9 @@ locally installed metadata, caches the result, and answers on the ordinary
 Tab key. There is no new shell, terminal, prompt, account, network service or
 AI involved.
 
-> **Status: pre-release (0.1.0).** Tagged versions are distributed as
-> GitHub releases (static binaries, `.deb`, `.rpm`); the crate is not
-> published on crates.io. See [Limitations](#limitations).
+> **Status: pre-release (0.1.1).** Tagged versions are distributed as
+> GitHub releases (static binaries, `.deb`, `.rpm`) and on crates.io
+> (`cargo install tabtrail`). See [Limitations](#limitations).
 
 ## How it works
 
@@ -45,6 +45,12 @@ Requirements: Linux, Rust 1.89 or newer.
 ```sh
 cargo build --release --locked
 install -m 0755 target/release/tabtrail ~/.local/bin/tabtrail   # or any directory on PATH
+```
+
+From crates.io (builds from source with your toolchain):
+
+```sh
+cargo install tabtrail --locked
 ```
 
 Release archives, `.deb` and `.rpm` packages are produced by the release

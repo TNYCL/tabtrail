@@ -114,7 +114,7 @@ jobs:
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq rpm file cpio
       - name: Release script tests (fixture repositories)
         run: scripts/test-release-scripts.sh
-      - name: Publication policy (GitHub gate must pass; crates.io must stay denied by publish = false only)
+      - name: Publication policy (GitHub and crates.io gates must pass)
         run: scripts/check-release-policy.sh
       - run: cargo build --release --locked --target x86_64-unknown-linux-musl
       - name: Build packages and checksums
